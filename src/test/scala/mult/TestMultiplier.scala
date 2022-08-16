@@ -49,29 +49,59 @@ class TestMultiplier extends AnyFreeSpec with ChiselScalatestTester{
     }
   }
 
-  "multiply lots of numbers" in {
+  "multiply by zero" in {
     test(new Multiplier(8)).withAnnotations(Seq(WriteVcdAnnotation)) {
       c => {
         c.io.a.initSource().setSourceClock(c.clock)
         c.io.b.initSource().setSourceClock(c.clock)
         c.io.z.initSink().setSinkClock(c.clock)
-        val rand = new Random(1)
 
-        val total_count = 250
-        var a_count: Int = 0
-        var b_count: Int = 0
-        var rx_count: Int = 0
-        val a_in = for (i <- 0 until total_count) yield rand.nextInt(254)
-        val b_in = for (i <- 0 until total_count) yield rand.nextInt(254)
-        val z_out = for (i <- 0 until total_count) yield a_in(i) * b_in(i)
-
+        val a_in = Seq(0.U, 5.U, 10.U, 5.U, 254.U, 0.U, 254.U)
+        val b_in = Seq(5.U, 0.U, 5.U, 10.U, 0.U,   0.U, 1.U)
+        val z_in = Seq(0.U, 0.U, 50.U, 50.U, 0.U,  0.U, 254.U)
         fork {
-          c.io.a.enqueueSeq(for (a <- a_in) yield a.U)
+          c.io.a.enqueueSeq(a_in)
         }.fork {
-          c.io.b.enqueueSeq(for (b <- b_in) yield b.U)
+          c.io.b.enqueueSeq(b_in)
         }.fork {
-          c.io.z.expectDequeueSeq(for (z <- z_out) yield z.U)
+          c.io.z.expectDequeueSeq(z_in)
         }.join()
+      }
+    }
+  }
+
+  /*
+   * This test shows using the enqueueSeq and dequeueSeq methods to conduct a basic
+   * streaming test.  It also shows how to use an outer list of parameters to
+   * iterate over multiple parameter values in the same test.
+   */
+  "multiply lots of numbers" in {
+    for (width <- Seq(4, 8, 12, 17, 21, 30)) {
+      test(new Multiplier(width)).withAnnotations(Seq(WriteVcdAnnotation)) {
+        c => {
+          c.io.a.initSource().setSourceClock(c.clock)
+          c.io.b.initSource().setSourceClock(c.clock)
+          c.io.z.initSink().setSinkClock(c.clock)
+          val rand = new Random(1)
+
+          val total_count = 100
+          val max_value = (1L << width.toLong) - 1L
+          var a_count: Int = 0
+          var b_count: Int = 0
+          var rx_count: Int = 0
+          val a_in = for (i <- 0 until total_count) yield rand.nextLong(max_value)
+          val b_in = for (i <- 0 until total_count) yield rand.nextLong(max_value)
+          val z_out = for (i <- 0 until total_count) yield a_in(i) * b_in(i)
+
+          c.clock.setTimeout(total_count * width+50)
+          fork {
+            c.io.a.enqueueSeq(for (a <- a_in) yield a.U)
+          }.fork {
+            c.io.b.enqueueSeq(for (b <- b_in) yield b.U)
+          }.fork {
+            c.io.z.expectDequeueSeq(for (z <- z_out) yield z.U)
+          }.join()
+        }
       }
     }
   }

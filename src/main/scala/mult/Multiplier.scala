@@ -33,10 +33,14 @@ class Multiplier(width: Int) extends Module {
     busy := 1.B
   }.elsewhen(busy & !done) {
     z_hold := z_hold + (io.a.bits << shift)
-    when (b_hold === 1.U) {
+
+    when ((b_hold === 1.U) || (b_hold === 0.U)) {
       busy := 0.U
       done := 1.B
       io.a.ready := 1.B
+      when (b_hold === 0.U) {
+        z_hold := 0.U
+      }
     }.otherwise {
       b_hold := b_hold >> nxtShift
       shift := shift + nxtShift
